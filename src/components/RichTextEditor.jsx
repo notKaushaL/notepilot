@@ -4,11 +4,13 @@ import {
   Type, Undo, Redo, Palette, List, ListOrdered
 } from 'lucide-react';
 import GlossaryTooltip from './GlossaryTooltip';
+import { useAI } from '../hooks/useAI';
 
 const RichTextEditor = ({ content, onChange, glossaryTerms = [] }) => {
   const editorRef = useRef(null);
   const [isEditorFocused, setIsEditorFocused] = useState(false);
   const [formatStates, setFormatStates] = useState({});
+  const { getWordCount } = useAI();
 
   // Initialize editor content
   useEffect(() => {
@@ -229,6 +231,13 @@ const RichTextEditor = ({ content, onChange, glossaryTerms = [] }) => {
         
         {/* Glossary Tooltips */}
         <GlossaryTooltip />
+        
+        {/* Word Count Display */}
+        <div className="absolute bottom-4 right-4 bg-gray-800 bg-opacity-90 px-3 py-1 rounded-lg border border-gray-600">
+          <span className="text-sm text-gray-300">
+            {getWordCount(content)} words
+          </span>
+        </div>
       </div>
     </div>
   );

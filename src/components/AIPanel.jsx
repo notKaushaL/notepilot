@@ -11,11 +11,13 @@ import {
   Check,
   BookOpen
 } from 'lucide-react';
+import { useAI } from '../hooks/useAI';
 
 const AIPanel = ({ note, aiFeatures, isLoading, translateNote, processNoteWithAI, isContentValid, streamingText, isStreaming }) => {
   const [activeTab, setActiveTab] = useState('summary');
   const [translationLang, setTranslationLang] = useState('es');
   const [copiedItems, setCopiedItems] = useState({});
+  const { getWordCount } = useAI();
 
   const copyToClipboard = async (text, itemKey) => {
     try {
@@ -152,6 +154,15 @@ const AIPanel = ({ note, aiFeatures, isLoading, translateNote, processNoteWithAI
                           )}
                         </div>
                       </div>
+                      
+                      {/* Summary Word Count - Bottom Right */}
+                      {(aiFeatures?.summary || isStreaming) && (
+                        <div className="absolute bottom-3 left-4 bg-gray-700/80 px-2 py-1 rounded-md border border-gray-600/50">
+                          <span className="text-xs text-gray-300 font-medium">
+                            {getWordCount(isStreaming ? streamingText : aiFeatures.summary)} words
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   
@@ -468,6 +479,13 @@ const AIPanel = ({ note, aiFeatures, isLoading, translateNote, processNoteWithAI
                       <div className="text-base text-gray-100 text-professional">
                         {aiFeatures.translation[translationLang]}
                       </div>
+                    </div>
+                    
+                    {/* Translation Word Count */}
+                    <div className="absolute bottom-3 left-4 bg-gray-700/80 px-2 py-1 rounded-md border border-gray-600/50">
+                      <span className="text-xs text-gray-300 font-medium">
+                        {getWordCount(aiFeatures.translation[translationLang])} words
+                      </span>
                     </div>
                   </div>
                 </div>
