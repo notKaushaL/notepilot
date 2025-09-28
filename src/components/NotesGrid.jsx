@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Pin, MoreVertical, Clock, Lock, Shield, Trash2, Archive, ArchiveRestore } from 'lucide-react';
+import { Pin, MoreVertical, Clock, Lock, Shield, Trash2, Archive, ArchiveRestore, Plus } from 'lucide-react';
 import EncryptionModal from './EncryptionModal';
 
 const NotesGrid = ({ 
@@ -12,7 +12,8 @@ const NotesGrid = ({
   onEncryptNote,
   onDecryptNote,
   timeFilter = 'all',
-  showArchived = false
+  showArchived = false,
+  onCreateFirstNote
 }) => {
   console.log('🔍 NotesGrid render - Functions check:', {
     onTogglePin: typeof onTogglePin,
@@ -246,16 +247,41 @@ const NotesGrid = ({
     return new Date(b.updatedAt) - new Date(a.updatedAt);
   });
 
+  // Only show "No notes yet" when there are absolutely no notes
+  if (notes.length === 0) {
+    return (
+      <div className="flex items-center justify-center min-h-[500px] h-full w-full">
+        <div className="text-center text-white max-w-md px-8">
+          <div className="w-20 h-20 mx-auto mb-6 bg-white/5 backdrop-blur-md rounded-full border border-white/10 flex items-center justify-center shadow-lg">
+            <Clock size={28} className="text-gray-400" />
+          </div>
+          <h3 className="text-2xl font-bold text-white mb-3">No notes yet</h3>
+          <p className="text-gray-400 font-medium text-lg leading-relaxed mb-6">
+            Create your first note to get started
+          </p>
+          <button
+            onClick={onCreateFirstNote}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-white/10 hover:bg-white/15 backdrop-blur-md border border-white/20 hover:border-white/30 text-white font-medium rounded-xl transition-all duration-200 hover:shadow-lg hover:shadow-white/5"
+          >
+            <Plus size={20} />
+            Create your first note
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // If no notes match the current filter but notes exist, show empty filter message
   if (sortedNotes.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-gray-900">
-        <div className="text-center text-white max-w-md">
-          <div className="w-24 h-24 mx-auto mb-6 bg-gray-800 rounded-2xl flex items-center justify-center shadow-lg">
-            <Clock size={32} className="text-gray-400" />
+      <div className="flex items-center justify-center min-h-[500px] h-full w-full">
+        <div className="text-center text-white max-w-md px-8">
+          <div className="w-16 h-16 mx-auto mb-4 bg-white/5 backdrop-blur-md rounded-full border border-white/10 flex items-center justify-center shadow-lg">
+            <Clock size={20} className="text-gray-400" />
           </div>
-          <h3 className="text-lg font-bold text-white mb-2">No notes yet</h3>
-          <p className="text-gray-400 font-medium">
-            Create your first note to get started
+          <h3 className="text-xl font-semibold text-white mb-2">No matching notes</h3>
+          <p className="text-gray-400 text-sm">
+            {showArchived ? 'No archived notes found' : 'Try adjusting your search or time filter'}
           </p>
         </div>
       </div>
@@ -263,31 +289,30 @@ const NotesGrid = ({
   }
 
   return (
-    <div className="p-4 sm:p-6 pb-8">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 sm:gap-6 auto-rows-max">
+    <div className="p-3 sm:p-4 pb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4 auto-rows-max">
         {sortedNotes.map((note, index) => {
-          const isNewNote = newNoteIds.has(note.id);
+          const isNewNote = newNoteIds.has(note.id) || note.isNewlyCreated;
           const cardColor = 'bg-gray-800 border-gray-700';
           
           return (
             <div
               key={note.id}
               className={`
-                relative group cursor-pointer rounded-xl p-6 transition-all duration-300 
-                hover:shadow-2xl hover:transform hover:scale-105 shadow-lg border
+                relative group cursor-pointer rounded-lg p-5 transition-all duration-200 
+                hover:shadow-xl hover:transform hover:translate-y-[-1px] shadow-md border overflow-visible h-[180px] flex flex-col
                 ${note.isEncrypted ? 'bg-gray-800 border-gray-600' : cardColor}
                 ${currentNote?.id === note.id ? 'ring-2 ring-white ring-offset-2 ring-offset-gray-900' : ''}
-                ${isNewNote ? 'animate-scaleIn animate-slideUp' : ''}
               `}
               onClick={() => handleNoteClick(note)}
             >
               {/* Header */}
-              <div className="flex items-start justify-between mb-3">
+              <div className="flex items-start justify-between mb-4">
                 <div className="flex-1 min-w-0 flex items-center gap-2">
                   {note.isEncrypted && (
                     <Lock className="text-gray-400 flex-shrink-0" size={16} />
                   )}
-                  <h3 className="font-bold text-white truncate text-lg leading-tight">
+                  <h3 className="font-semibold text-white truncate text-lg leading-tight">
                     {note.isEncrypted ? (note.previewTitle || 'Encrypted Note') : (note.title || 'Untitled Note')}
                   </h3>
                 </div>
@@ -296,7 +321,7 @@ const NotesGrid = ({
                   {note.isPinned && (
                     <Pin 
                       className="text-yellow-400 fill-yellow-400" 
-                      size={16} 
+                      size={14} 
                     />
                   )}
                   {note.isArchived && (
@@ -307,52 +332,52 @@ const NotesGrid = ({
                   )}
                   <button
                     onClick={(e) => handleDropdownToggle(note.id, e)}
-                    className="opacity-0 group-hover:opacity-100 p-2 hover:bg-gray-700 transition-all rounded-lg"
+                    className="opacity-0 group-hover:opacity-100 p-2 hover:bg-white/5 transition-all duration-150 rounded-md"
                   >
-                    <MoreVertical size={16} className="text-gray-400" />
+                    <MoreVertical size={16} className="text-gray-400 hover:text-gray-300" />
                   </button>
 
                   {/* Dropdown Menu */}
                   {activeDropdown === note.id && (
-                    <div className="absolute top-10 right-0 bg-gray-800 border border-gray-600 rounded-xl shadow-2xl z-50 min-w-40 py-2">
+                    <div className="absolute top-10 right-0 bg-gray-800/95 backdrop-blur-md border border-gray-600/50 rounded-lg shadow-xl z-50 min-w-[160px] py-2 overflow-visible">
                       <button
                         onClick={(e) => handlePinClick(note.id, e)}
-                        className="w-full px-4 py-2 text-left font-medium hover:bg-gray-700 flex items-center gap-2 text-white"
+                        className="w-full px-4 py-2.5 text-left text-sm font-medium hover:bg-white/5 flex items-center gap-3 text-gray-200 hover:text-white transition-all duration-150"
                       >
-                        <Pin size={14} className={note.isPinned ? 'text-yellow-400 fill-yellow-400' : ''} />
+                        <Pin size={14} className={note.isPinned ? 'text-yellow-400 fill-yellow-400' : 'text-gray-400'} />
                         {note.isPinned ? 'Unpin' : 'Pin'}
                       </button>
                       
                       {!note.isEncrypted ? (
                         <button
                           onClick={(e) => handleEncryptClick(note, e)}
-                          className="w-full px-4 py-2 text-left font-medium hover:bg-gray-700 flex items-center gap-2 text-white"
+                          className="w-full px-4 py-2.5 text-left text-sm font-medium hover:bg-white/5 flex items-center gap-3 text-gray-200 hover:text-white transition-all duration-150"
                         >
-                          <Shield size={14} />
+                          <Shield size={14} className="text-gray-400" />
                           Encrypt
                         </button>
                       ) : (
                         <button
                           onClick={(e) => handleDecryptClick(note, e)}
-                          className="w-full px-4 py-2 text-left font-medium hover:bg-gray-700 flex items-center gap-2 text-white"
+                          className="w-full px-4 py-2.5 text-left text-sm font-medium hover:bg-white/5 flex items-center gap-3 text-gray-200 hover:text-white transition-all duration-150"
                         >
-                          <Lock size={14} />
+                          <Lock size={14} className="text-gray-400" />
                           Decrypt
                         </button>
                       )}
                       
                       <button
                         onClick={(e) => handleArchiveClick(note.id, e)}
-                        className="w-full px-4 py-2 text-left font-medium hover:bg-gray-700 flex items-center gap-2 text-white"
+                        className="w-full px-4 py-2.5 text-left text-sm font-medium hover:bg-white/5 flex items-center gap-3 text-gray-200 hover:text-white transition-all duration-150"
                       >
-                        {note.isArchived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
+                        {note.isArchived ? <ArchiveRestore size={14} className="text-gray-400" /> : <Archive size={14} className="text-gray-400" />}
                         {note.isArchived ? 'Unarchive' : 'Archive'}
                       </button>
                       
-                      <hr className="border-gray-600 my-1" />
+                      <hr className="border-gray-600/50 my-1.5" />
                       <button
                         onClick={(e) => handleDeleteClick(note.id, e)}
-                        className="w-full px-4 py-2 text-left font-medium hover:bg-red-900 text-red-400 hover:text-red-300 flex items-center gap-2"
+                        className="w-full px-4 py-2.5 text-left text-sm font-medium hover:bg-red-500/10 text-red-400 hover:text-red-300 flex items-center gap-3 transition-all duration-150"
                       >
                         <Trash2 size={14} />
                         Delete
@@ -362,17 +387,17 @@ const NotesGrid = ({
                 </div>
               </div>
 
-              {/* Content Preview */}
-              <div className="mb-6">
-                <p className={`font-medium leading-relaxed line-clamp-4 ${
+              {/* Content Preview - Flexible content area */}
+              <div className="flex-1 mb-4 overflow-hidden">
+                <p className={`font-medium leading-relaxed line-clamp-3 ${
                   note.isEncrypted ? 'text-gray-400 italic' : 'text-gray-300'
                 }`}>
                   {getPreview(note)}
                 </p>
               </div>
 
-              {/* Footer */}
-              <div className="flex items-center justify-between text-xs text-gray-400 font-medium">
+              {/* Footer - Always at bottom */}
+              <div className="flex-shrink-0 flex items-center justify-between text-xs text-gray-400 font-medium mt-auto">
                 <div className="flex items-center gap-2">
                   <Clock size={12} />
                   <span>{formatTime(note.updatedAt)}</span>
@@ -382,19 +407,19 @@ const NotesGrid = ({
                 </span>
               </div>
 
-              {/* Tags */}
+              {/* Tags - Positioned above footer */}
               {note.aiTags && note.aiTags.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-gray-700">
+                <div className="flex-shrink-0 flex flex-wrap gap-1 mt-2 mb-2">
                   {note.aiTags.slice(0, 2).map((tag, tagIndex) => (
                     <span
                       key={tagIndex}
-                      className="inline-block px-3 py-1 text-xs bg-gray-700 text-gray-300 rounded-full font-medium"
+                      className="inline-block px-2 py-1 text-xs bg-gray-700 text-gray-300 rounded-full font-medium"
                     >
                       {tag}
                     </span>
                   ))}
                   {note.aiTags.length > 2 && (
-                    <span className="inline-block px-3 py-1 text-xs bg-gray-700 text-gray-300 rounded-full font-medium">
+                    <span className="inline-block px-2 py-1 text-xs bg-gray-700 text-gray-300 rounded-full font-medium">
                       +{note.aiTags.length - 2}
                     </span>
                   )}

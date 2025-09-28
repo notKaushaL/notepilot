@@ -1,4 +1,9 @@
-import React, { useState } from 'react';
+/**
+ * AIPanel - Enhanced AI Panel with integrated summary functionality
+ * Combines existing AI features with new summary system
+ */
+
+import React, { useState, useEffect } from 'react';
 import { 
   Brain, 
   Sparkles, 
@@ -9,15 +14,114 @@ import {
   Languages,
   Copy,
   Check,
+  FileText,
+  Pen,
+  RotateCcw,
+  Settings,
+  TrendingUp,
+  Zap,
   BookOpen
 } from 'lucide-react';
 import { useAI } from '../hooks/useAI';
+import { useSummary } from '../hooks/useSummary';
+import NoteSummary from './NoteSummary';
 
-const AIPanel = ({ note, aiFeatures, isLoading, translateNote, processNoteWithAI, isContentValid, streamingText, isStreaming }) => {
+const AIPanel = ({ 
+  note, 
+  aiFeatures, 
+  isLoading, 
+  translateNote, 
+  processNoteWithAI, 
+  isContentValid, 
+  streamingText, 
+  isStreaming 
+}) => {
   const [activeTab, setActiveTab] = useState('summary');
+  const [showSummary, setShowSummary] = useState(false);
   const [translationLang, setTranslationLang] = useState('es');
   const [copiedItems, setCopiedItems] = useState({});
+  const [showApiStatus, setShowApiStatus] = useState(false);
+  // Track which languages have been explicitly requested for translation
+  const [requestedTranslations, setRequestedTranslations] = useState(new Set());
+
+  // Handle language change without triggering translation
+  const handleLanguageChange = (newLang) => {
+    console.log('🌐 Language changed from', translationLang, 'to', newLang);
+    setTranslationLang(newLang);
+    // CRITICAL: Clear requested translations when language changes to prevent auto-display
+    setRequestedTranslations(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(newLang); // Remove the new language from requested to force button click
+      console.log('� Cleared requested translation for', newLang, '- user must click translate button');
+      return newSet;
+    });
+  };
+
+  // Handle translation request
+  const handleTranslateRequest = async () => {
+    console.log('🔄 Translation explicitly requested for:', translationLang);
+    // Clear and then mark this specific language as requested
+    setRequestedTranslations(prev => {
+      const newSet = new Set(prev);
+      newSet.add(translationLang);
+      console.log('✅ Added', translationLang, 'to requested translations:', Array.from(newSet));
+      return newSet;
+    });
+    // Perform the actual translation
+    if (translateNote && note?.content) {
+      await translateNote(note.content, translationLang);
+    }
+  };
+  
   const { getWordCount } = useAI();
+  // AI hook functionality for summary generation
+  const {
+    generateSummary,
+    getSummary,
+    isSummaryLoading,
+    getSummaryError,
+    refreshSummary,
+    summaries
+  } = useSummary();
+
+  // Get current summary state for the note (without auto-generation)
+  const currentSummary = note && summaries ? summaries.get(note.id) : null;
+  const summaryLoading = note ? isSummaryLoading(note.id) : false;
+  const summaryError = note ? getSummaryError(note.id) : null;
+
+  // Debug logging
+  React.useEffect(() => {
+    if (note) {
+      console.log('📊 Summary State:', {
+        noteId: note.id,
+        hasSummary: !!currentSummary,
+        isLoading: summaryLoading,
+        hasError: !!summaryError,
+        summariesSize: summaries?.size || 0
+      });
+    }
+  }, [note?.id, currentSummary, summaryLoading, summaryError, summaries]);
+
+  // Clear requested translations when note changes
+  React.useEffect(() => {
+    if (note?.id) {
+      console.log('📝 Note changed, clearing requested translations for fresh start');
+      setRequestedTranslations(new Set());
+    }
+  }, [note?.id]);
+
+  // Clear requested translations when language changes (backup safety)
+  React.useEffect(() => {
+    console.log('🔄 Language effect: clearing requested for', translationLang, 'to prevent auto-display');
+    // Don't clear all, just make sure current language is not in requested set
+    setRequestedTranslations(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(translationLang);
+      return newSet;
+    });
+  }, [translationLang]);
+
+  // Removed auto-generation - now using manual generation
 
   const copyToClipboard = async (text, itemKey) => {
     try {
@@ -30,6 +134,8 @@ const AIPanel = ({ note, aiFeatures, isLoading, translateNote, processNoteWithAI
       console.error('Failed to copy text: ', err);
     }
   };
+
+  // Removed unused summary handlers - using manual generation now
 
   const languages = [
     { code: 'es', name: 'Spanish' },
@@ -49,23 +155,56 @@ const AIPanel = ({ note, aiFeatures, isLoading, translateNote, processNoteWithAI
   const tabs = [
     { id: 'summary', label: 'Summary', icon: Brain },
     { id: 'tags', label: 'Tags', icon: Tags },
-    { id: 'grammar', label: 'Grammar', icon: CheckCircle },
     { id: 'translate', label: 'Translate', icon: Languages }
   ];
 
+  const renderApiStatusModal = () => {
+    if (!showApiStatus) return null;
+    
+    return (
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" 
+           onClick={() => setShowApiStatus(false)}>
+        <div className="bg-gray-800 border border-gray-600 rounded-xl p-6 max-w-md w-full mx-4" 
+             onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-white">AI Status</h3>
+            <button 
+              onClick={() => setShowApiStatus(false)}
+              className="text-gray-400 hover:text-white"
+            >
+              ✕
+            </button>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="text-center py-4">
+              <div className="p-3 bg-green-500/20 rounded-lg w-fit mx-auto mb-3">
+                <Brain className="text-green-400" size={24} />
+              </div>
+              <h4 className="font-medium text-white text-base mb-2">AI System Active</h4>
+              <p className="text-gray-400 text-sm">
+                Multi-provider AI system is running with fallback support
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const renderTabContent = () => {
-    if (isLoading) {
+    if (isLoading && activeTab === 'summary') {
       return (
-        <div className="flex flex-col items-center justify-center py-12">
+        <div className="flex flex-col items-center justify-center py-8">
           <div className="relative">
-            <div className="p-4 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl shadow-2xl">
-              <Loader2 className="animate-spin text-white" size={40} />
+            <div className="p-3 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl shadow-xl">
+              <Loader2 className="animate-spin text-white" size={32} />
             </div>
             <div className="absolute -top-2 -right-2 w-6 h-6 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full animate-pulse"></div>
           </div>
           <div className="mt-5 text-center">
-            <h4 className="font-bold text-white text-xl mb-2 tracking-tight">AI is Processing</h4>
-            <p className="text-gray-400 font-medium text-base leading-relaxed">Analyzing your content with advanced algorithms...</p>
+            <h4 className="font-bold text-white text-lg mb-1 tracking-tight">AI is Processing</h4>
+            <p className="text-gray-400 font-medium text-sm leading-relaxed">Analyzing your content with advanced algorithms...</p>
           </div>
         </div>
       );
@@ -75,141 +214,141 @@ const AIPanel = ({ note, aiFeatures, isLoading, translateNote, processNoteWithAI
       case 'summary':
         return (
           <div className="h-full flex flex-col space-y-4">
-            <div className="flex items-center gap-3 pb-3 border-b border-gray-600/40 flex-shrink-0">
-              <div className="p-2.5 bg-white rounded-lg shadow-lg">
-                <Brain className="text-black" size={20} />
+            {/* Header with controls */}
+            <div className="flex items-center justify-between pb-2 border-b border-gray-600/40 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-white rounded-lg shadow-lg">
+                  <Brain className="text-black" size={16} />
+                </div>
+                <h3 className="text-lg font-bold text-white tracking-tight">AI Summary</h3>
               </div>
-              <h3 className="text-xl font-bold text-white tracking-tight">AI Summary</h3>
+              
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowApiStatus(true)}
+                  className="p-2 text-gray-400 hover:text-white hover:bg-gray-700 rounded-lg transition-colors"
+                  title="API Status"
+                >
+                  <Settings size={16} />
+                </button>
+              </div>
             </div>
             
             <div className="space-y-4 flex-1 flex flex-col">
-              {/* Summarize Button */}
-              {note?.content && isContentValid && isContentValid(note.content) && (
+              {/* Generate Summary Button - Smaller Size */}
+              {note?.content && (!currentSummary || summaryError) && !summaryLoading && (
                 <button
-                  onClick={() => processNoteWithAI && processNoteWithAI(note.content, 'summary')}
-                  disabled={isLoading || isStreaming}
-                  className="w-full p-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-3"
+                  onClick={async () => {
+                    try {
+                      console.log('🔥 Generate Summary clicked for note:', note.id);
+                      await generateSummary(note.id, note.content);
+                      console.log('✅ Summary generated successfully');
+                    } catch (error) {
+                      console.error('❌ Failed to generate summary:', error);
+                    }
+                  }}
+                  disabled={summaryLoading}
+                  className="w-full px-4 py-2.5 bg-white hover:bg-gray-50 disabled:bg-gray-100 text-gray-800 disabled:text-gray-500 text-sm font-medium rounded-lg transition-all duration-200 ease-out flex items-center justify-center gap-2 border border-gray-200 hover:border-gray-300 disabled:border-gray-200 shadow-sm hover:shadow-md disabled:shadow-none"
                 >
-                  {isLoading || isStreaming ? (
-                    <>
-                      <Loader2 className="animate-spin" size={18} />
-                      {isStreaming ? 'AI Writing Summary...' : 'Generating Summary...'}
-                    </>
-                  ) : (
-                    <>
-                      <Brain size={18} />
-                      Generate AI Summary
-                    </>
-                  )}
+                  <FileText size={14} />
+                  Generate Summary
                 </button>
               )}
+              
+              {/* Debug info disabled */}
 
-              {/* Summary Result */}
-              {(aiFeatures?.summary || isStreaming) ? (
-                <>
-                  <div className="relative flex-1">
-                    <div className="bg-gradient-to-br from-gray-800 to-gray-700 rounded-xl border border-gray-600/50 shadow-xl backdrop-blur-sm h-full flex flex-col">
-                      {/* Copy Button - Small, Right Corner - Only show when not streaming */}
-                      {!isStreaming && aiFeatures?.summary && (
-                        <button
-                          onClick={() => copyToClipboard(aiFeatures.summary, 'summary')}
-                          className={`absolute top-2 right-2 p-1.5 rounded-md transition-all duration-200 z-30 ${
-                            copiedItems.summary 
-                              ? 'bg-yellow-500 shadow-md shadow-yellow-500/30 scale-105' 
-                              : 'bg-white/90 hover:bg-white shadow-md hover:shadow-lg backdrop-blur-sm border border-gray-300/40 hover:scale-105'
-                          }`}
-                          title="Copy summary"
-                        >
-                          {copiedItems.summary ? (
-                            <Check size={12} className="text-white" />
-                          ) : (
-                            <Copy size={12} className="text-gray-700" />
-                          )}
-                        </button>
-                      )}
-                      
-                      {/* Streaming Animation Indicator */}
-                      {isStreaming && (
-                        <div className="absolute top-2 right-2 flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-600/90 to-purple-600/90 rounded-lg backdrop-blur-sm border border-white/30 shadow-lg">
-                          <div className="ai-writing-dots flex space-x-1">
-                            <div className="dot w-1.5 h-1.5 bg-white rounded-full"></div>
-                            <div className="dot w-1.5 h-1.5 bg-white rounded-full"></div>
-                            <div className="dot w-1.5 h-1.5 bg-white rounded-full"></div>
-                          </div>
-                          <span className="text-xs font-semibold text-white">AI Writing...</span>
-                        </div>
-                      )}
-                      
-                      {/* Text Content - Real-time Streaming or Final Result */}
-                      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-500 scrollbar-track-gray-700/50 p-5 pr-10">
-                        <div className="text-base text-gray-100 text-summary-premium">
-                          {isStreaming ? (
-                            <div className="relative ai-streaming-text">
-                              <span className="inline-block">{streamingText}</span>
-                              {/* Professional typing cursor animation */}
-                              <span className="ai-cursor inline-block w-0.5 h-5 bg-gradient-to-t from-blue-400 to-purple-400 ml-1 rounded-full"></span>
-                            </div>
-                          ) : (
-                            aiFeatures.summary
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* Summary Word Count - Bottom Right */}
-                      {(aiFeatures?.summary || isStreaming) && (
-                        <div className="absolute bottom-3 left-4 bg-gray-700/80 px-2 py-1 rounded-md border border-gray-600/50">
-                          <span className="text-xs text-gray-300 font-medium">
-                            {getWordCount(isStreaming ? streamingText : aiFeatures.summary)} words
-                          </span>
-                        </div>
-                      )}
-                    </div>
+              {/* Loading State */}
+              {summaryLoading && (
+                <div className="flex items-center justify-center py-6">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="animate-spin text-blue-400" size={20} />
+                    <span className="text-white font-medium">Generating summary...</span>
                   </div>
+                </div>
+              )}
+              
+              {/* Summary Display */}
+              {(currentSummary || summaryError) && !summaryLoading && (
+                <div className="mt-4 space-y-3">
+                  <NoteSummary
+                    noteId={note?.id}
+                    summary={currentSummary}
+                    isLoading={summaryLoading}
+                    error={summaryError}
+                    onRefresh={() => refreshSummary(note.id, note.content)}
+                    onGenerate={() => generateSummary(note.id, note.content, true)}
+                    compact={false}
+                    showControls={false}
+                  />
                   
-                  {/* Glossary Terms Section */}
-                  {aiFeatures?.glossaryTerms && aiFeatures.glossaryTerms.length > 0 && (
-                    <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 rounded-xl border border-blue-500/30 p-4 flex-shrink-0">
-                      <div className="flex items-center gap-2 mb-3">
-                        <div className="p-1.5 bg-blue-500/20 rounded-lg">
-                          <BookOpen size={14} className="text-blue-400" />
-                        </div>
-                        <h4 className="text-sm font-bold text-blue-300">Key Terms</h4>
-                      </div>
-                      <div className="space-y-2">
-                        {aiFeatures.glossaryTerms.slice(0, 3).map((term, index) => (
-                          <div key={index} className="group cursor-pointer">
-                            <div className="text-xs font-semibold text-blue-200 glossary-highlight" 
-                                 data-term={term.word} 
-                                 data-definition={term.definition}>
-                              {term.word}
-                            </div>
-                            <div className="text-xs text-gray-400 leading-relaxed truncate">
-                              {term.definition}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                  {/* Small Regenerate Button Below Summary */}
+                  {currentSummary && !summaryLoading && (
+                    <div className="flex justify-center">
+                      <button
+                        onClick={async () => {
+                          try {
+                            console.log('🔄 Regenerate Summary clicked for note:', note.id);
+                            console.log('📝 Re-reading current content, length:', note.content?.length || 0);
+                            
+                            // Use refreshSummary which properly clears cache and regenerates
+                            await refreshSummary(note.id, note.content);
+                            console.log('✅ Summary regenerated successfully with fresh content');
+                          } catch (error) {
+                            console.error('❌ Failed to regenerate summary:', error);
+                          }
+                        }}
+                        disabled={summaryLoading}
+                        className="px-4 py-2 bg-white hover:bg-gray-50 disabled:bg-gray-100 text-gray-700 disabled:text-gray-500 text-sm font-medium rounded-lg transition-all duration-200 ease-out flex items-center gap-2 border border-gray-200 hover:border-gray-300 disabled:border-gray-200 shadow-sm hover:shadow-md disabled:shadow-none"
+                      >
+                        {summaryLoading ? (
+                          <Loader2 className="animate-spin" size={14} />
+                        ) : (
+                          <RotateCcw size={14} />
+                        )}
+                        {summaryLoading ? 'Regenerating...' : 'Regenerate'}
+                      </button>
                     </div>
                   )}
-                </>
-              ) : (
-                <div className="flex-1 flex flex-col items-center justify-center py-12">
-                  <div className="relative p-5 bg-gradient-to-br from-gray-800 to-gray-700 rounded-xl w-fit mx-auto mb-5 shadow-xl">
-                    <Brain className="text-gray-400" size={38} />
-                    <div className="absolute -top-1 -right-1 w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                </div>
+              )}
+
+              {/* No Content State */}
+              {(!note?.content || !isContentValid || !isContentValid(note.content)) && (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-center py-12">
+                    <div className="p-4 bg-gray-800/50 rounded-xl w-fit mx-auto mb-4">
+                      <FileText className="text-gray-400" size={32} />
+                    </div>
+                    <h4 className="font-medium text-white text-lg mb-2">Ready for AI Summary</h4>
+                    <p className="text-gray-400 text-sm max-w-xs mx-auto">
+                      Write some content in your note to generate an intelligent AI summary
+                    </p>
                   </div>
-                  <h4 className="font-bold text-white text-xl mb-2 tracking-tight">
-                    {note?.content && isContentValid && isContentValid(note.content) 
-                      ? 'Ready to Summarize' 
-                      : 'AI Summary Generator'}
-                  </h4>
-                  <p className="font-medium text-gray-400 max-w-sm mx-auto text-base leading-6 text-center">
-                    {note?.content && isContentValid && isContentValid(note.content)
-                      ? 'Click the button above to generate an intelligent AI summary'
-                      : 'Write at least 10 characters to enable AI summarization'}
-                  </p>
-                  <div className="mt-4 px-4 py-2 bg-blue-600/20 border border-blue-500/30 rounded-lg">
-                    <p className="text-xs text-blue-300 font-medium">🤖 Powered by Advanced AI</p>
+                </div>
+              )}
+
+              {/* Glossary Terms Section */}
+              {aiFeatures?.glossaryTerms && aiFeatures.glossaryTerms.length > 0 && (
+                <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 rounded-xl border border-blue-500/30 p-4 flex-shrink-0">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-1.5 bg-blue-500/20 rounded-lg">
+                      <BookOpen size={14} className="text-blue-400" />
+                    </div>
+                    <h4 className="text-sm font-bold text-blue-300">Key Terms</h4>
+                  </div>
+                  <div className="space-y-2">
+                    {aiFeatures.glossaryTerms.slice(0, 3).map((term, index) => (
+                      <div key={index} className="group cursor-pointer">
+                        <div className="text-xs font-semibold text-blue-200 glossary-highlight" 
+                             data-term={term.word} 
+                             data-definition={term.definition}>
+                          {term.word}
+                        </div>
+                        <div className="text-xs text-gray-400 leading-relaxed truncate">
+                          {term.definition}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -219,31 +358,29 @@ const AIPanel = ({ note, aiFeatures, isLoading, translateNote, processNoteWithAI
 
       case 'tags':
         return (
-          <div className="space-y-8">
-            <div className="flex items-center gap-4 pb-4 border-b border-gray-600/40">
-              <div className="p-3 bg-white rounded-xl shadow-lg">
-                <Tags className="text-black" size={22} />
+            <div className="space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-gray-600/40">
+              <div className="p-2 bg-white rounded-lg shadow-lg">
+                <Tags className="text-black" size={16} />
               </div>
-              <h3 className="text-2xl font-bold text-white tracking-tight">Smart Tags</h3>
-            </div>
-            
-            <div className="space-y-5">
+              <h3 className="text-lg font-bold text-white tracking-tight">AI Tags</h3>
+            </div>            <div className="space-y-4">
               {/* Generate Tags Button */}
               {note?.content && isContentValid && isContentValid(note.content) && (
                 <button
                   onClick={() => processNoteWithAI && processNoteWithAI(note.content, 'tags')}
                   disabled={isLoading}
-                  className="w-full p-4 bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-3"
+                  className="w-full px-4 py-2.5 bg-white hover:bg-gray-50 disabled:bg-gray-100 text-gray-800 disabled:text-gray-500 text-sm font-medium rounded-lg transition-all duration-200 ease-out flex items-center justify-center gap-2 border border-gray-200 hover:border-gray-300 disabled:border-gray-200 shadow-sm hover:shadow-md disabled:shadow-none"
                 >
                   {isLoading ? (
                     <>
-                      <Loader2 className="animate-spin" size={18} />
+                      <Loader2 className="animate-spin" size={14} />
                       Generating Tags...
                     </>
                   ) : (
                     <>
-                      <Tags size={18} />
-                      Generate Smart Tags
+                      <Tags size={14} />
+                      Generate Tags
                     </>
                   )}
                 </button>
@@ -252,152 +389,52 @@ const AIPanel = ({ note, aiFeatures, isLoading, translateNote, processNoteWithAI
               {/* Tags Result */}
               {aiFeatures?.tags && aiFeatures.tags.length > 0 ? (
                 <>
-                  <div className="bg-gradient-to-br from-gray-800 to-gray-700 rounded-2xl border border-gray-600/50 shadow-xl backdrop-blur-sm p-6 max-h-80 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
-                    <div className="flex flex-wrap gap-3">
+                  <div className="bg-gradient-to-br from-gray-800 to-gray-700 rounded-lg border border-gray-600/50 shadow-lg backdrop-blur-sm p-3 max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                    <div className="flex flex-wrap gap-1.5">
                       {aiFeatures.tags.map((tag, index) => (
                         <button
                           key={index}
-                          className={`group inline-flex items-center px-4 py-3 cursor-pointer transition-all duration-300 font-semibold rounded-lg shadow-lg backdrop-blur-sm ${
+                          className={`group inline-flex items-center px-2.5 py-1.5 cursor-pointer transition-all duration-300 font-medium rounded-md shadow-md backdrop-blur-sm ${
                             copiedItems[`tag-${index}`] 
-                              ? 'bg-yellow-500 text-white border border-yellow-400/50 shadow-yellow-500/30 scale-105' 
-                              : 'bg-white/15 text-gray-100 hover:bg-white hover:text-black border border-gray-500/50 hover:border-white hover:shadow-xl hover:scale-105'
+                              ? 'bg-yellow-500 text-white border border-yellow-400/50 shadow-yellow-500/30 shadow-lg' 
+                              : 'bg-white/15 text-gray-100 hover:bg-white/25 hover:text-gray-200 border border-gray-500/50 hover:border-gray-400/70 hover:shadow-md'
                           }`}
                           onClick={() => copyToClipboard(tag, `tag-${index}`)}
                           title="Click to copy"
                         >
-                          <span className="text-lg font-bold">#{tag}</span>
+                          <span className="text-xs font-semibold">#{tag}</span>
                           {copiedItems[`tag-${index}`] ? (
-                            <Check size={18} className="ml-3 text-white" />
+                            <Check size={12} className="ml-1.5 text-white" />
                           ) : (
-                            <Copy size={18} className="ml-3 opacity-70 group-hover:opacity-100 transition-opacity" />
+                            <Copy size={12} className="ml-1.5 opacity-70 group-hover:opacity-100 transition-opacity" />
                           )}
                         </button>
                       ))}
                     </div>
                   </div>
-                  <div className="bg-white/5 rounded-xl p-4 border border-gray-600/30">
-                    <p className="text-sm text-gray-300 font-medium flex items-center gap-2">
-                      <span className="w-2 h-2 bg-white rounded-full animate-pulse"></span>
+                  <div className="bg-white/5 rounded-md p-2 border border-gray-600/30">
+                    <p className="text-xs text-gray-300 font-medium flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
                       Click on any tag to copy it to your clipboard
                     </p>
                   </div>
                 </>
               ) : (
-                <div className="text-center py-16">
-                  <div className="relative p-6 bg-gradient-to-br from-gray-800 to-gray-700 rounded-2xl w-fit mx-auto mb-6 shadow-xl">
-                    <Tags className="text-gray-400" size={40} />
-                    <div className="absolute -top-2 -right-2 px-2 py-1 bg-green-500 text-xs font-bold text-white rounded-full animate-bounce">AI</div>
+                <div className="text-center py-6">
+                  <div className="p-3 bg-gray-800/50 rounded-lg w-fit mx-auto mb-3">
+                    <Tags className="text-gray-400" size={24} />
                   </div>
-                  <h4 className="font-bold text-white text-2xl mb-3 tracking-tight">Smart Tagging System</h4>
-                  <p className="font-medium text-gray-400 max-w-sm mx-auto text-lg leading-relaxed mb-4">
+                  <h4 className="font-medium text-white text-base mb-2">AI Tags</h4>
+                  <p className="text-gray-400 text-xs max-w-xs mx-auto mb-3">
                     {note?.content && isContentValid && isContentValid(note.content)
-                      ? 'Click the button above to generate intelligent tags for your content'
-                      : 'Write content to enable AI-powered tag generation'}
+                      ? 'Generate intelligent tags for your content'
+                      : 'Write content to enable tag generation'}
                   </p>
-                  <div className="flex flex-wrap gap-2 justify-center opacity-50">
-                    <span className="px-3 py-1 bg-blue-600/30 text-blue-300 rounded-full text-sm">#technology</span>
-                    <span className="px-3 py-1 bg-green-600/30 text-green-300 rounded-full text-sm">#project</span>
-                    <span className="px-3 py-1 bg-purple-600/30 text-purple-300 rounded-full text-sm">#ideas</span>
+                  <div className="flex flex-wrap gap-1 justify-center opacity-60">
+                    <span className="px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded text-xs">#tech</span>
+                    <span className="px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded text-xs">#notes</span>
+                    <span className="px-1.5 py-0.5 bg-gray-700 text-gray-300 rounded text-xs">#ideas</span>
                   </div>
-                </div>
-              )}
-            </div>
-          </div>
-        );
-
-      case 'grammar':
-        return (
-          <div className="space-y-8">
-            <div className="flex items-center gap-4 pb-4 border-b border-gray-600/40">
-              <div className="p-3 bg-white rounded-xl shadow-lg">
-                <CheckCircle className="text-black" size={22} />
-              </div>
-              <h3 className="text-2xl font-bold text-white tracking-tight">Grammar Check</h3>
-            </div>
-            
-            <div className="space-y-5">
-              {/* Check Grammar Button */}
-              {note?.content && isContentValid && isContentValid(note.content) && (
-                <button
-                  onClick={() => processNoteWithAI && processNoteWithAI(note.content, 'grammar')}
-                  disabled={isLoading}
-                  className="w-full p-4 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-3"
-                >
-                  {isLoading ? (
-                    <>
-                      <Loader2 className="animate-spin" size={18} />
-                      Checking Grammar...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle size={18} />
-                      Check Grammar & Style
-                    </>
-                  )}
-                </button>
-              )}
-
-              {/* Grammar Result */}
-              {aiFeatures?.grammarIssues !== null ? (
-                aiFeatures.grammarIssues.length > 0 ? (
-                  <div className="bg-gradient-to-br from-gray-800 to-gray-700 rounded-2xl border border-gray-600/50 shadow-xl backdrop-blur-sm p-6 max-h-80 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
-                    <div className="space-y-4">
-                      {aiFeatures.grammarIssues.map((issue, index) => (
-                        <div key={index} className="bg-gradient-to-r from-orange-900/40 to-red-900/40 border border-orange-500/30 rounded-xl p-5 backdrop-blur-sm">
-                          <div className="flex items-start gap-4">
-                            <div className="p-2 bg-orange-500/20 rounded-lg flex-shrink-0">
-                              <AlertCircle className="text-orange-400" size={18} />
-                            </div>
-                            <div className="flex-1 space-y-3">
-                              <div className="flex items-center gap-2">
-                                <span className="px-3 py-1 bg-orange-500/30 text-orange-200 text-xs font-semibold rounded-full uppercase tracking-wide">
-                                  {issue.type}
-                                </span>
-                              </div>
-                              <p className="text-gray-200 font-medium leading-relaxed text-professional">{issue.message}</p>
-                              {issue.suggestion && (
-                                <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/30">
-                                  <p className="text-gray-300 font-medium text-professional">
-                                    <span className="text-green-400 font-semibold">💡 Suggestion:</span> {issue.suggestion}
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-16">
-                    <div className="relative p-6 bg-gradient-to-br from-green-800/30 to-emerald-700/30 rounded-2xl w-fit mx-auto mb-6 shadow-xl border border-green-500/30">
-                      <CheckCircle className="text-green-400" size={40} />
-                      <div className="absolute -top-2 -right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
-                        <Check size={12} className="text-white" />
-                      </div>
-                    </div>
-                    <h4 className="font-bold text-green-300 text-2xl mb-3 tracking-tight">Excellent Writing!</h4>
-                    <p className="font-medium text-gray-400 max-w-sm mx-auto text-lg leading-relaxed mb-4">
-                      Your content has been analyzed by AI and no grammar issues were detected
-                    </p>
-                    <div className="flex items-center justify-center gap-2 px-4 py-2 bg-green-600/20 border border-green-500/30 rounded-lg">
-                      <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                      <p className="text-xs text-green-300 font-medium">AI Analysis Complete</p>
-                    </div>
-                  </div>
-                )
-              ) : (
-                <div className="text-center py-16">
-                  <div className="relative p-6 bg-gradient-to-br from-gray-800 to-gray-700 rounded-2xl w-fit mx-auto mb-6 shadow-xl">
-                    <CheckCircle className="text-gray-400" size={40} />
-                    <div className="absolute -top-2 -right-2 px-2 py-1 bg-orange-500 text-xs font-bold text-white rounded-full">AI</div>
-                  </div>
-                  <h4 className="font-bold text-white text-2xl mb-3 tracking-tight">Grammar & Style Checker</h4>
-                  <p className="font-medium text-gray-400 max-w-sm mx-auto text-lg leading-relaxed mb-4">
-                    {note?.content && isContentValid && isContentValid(note.content)
-                      ? 'Click the button above to analyze your writing for grammar, spelling, and style improvements'
-                      : 'Write content to enable AI-powered grammar and style checking'}
-                  </p>
                 </div>
               )}
             </div>
@@ -406,24 +443,24 @@ const AIPanel = ({ note, aiFeatures, isLoading, translateNote, processNoteWithAI
 
       case 'translate':
         return (
-          <div className="space-y-8">
-            <div className="flex items-center gap-4 pb-4 border-b border-gray-600/40">
-              <div className="p-3 bg-white rounded-xl shadow-lg">
-                <Languages className="text-black" size={22} />
+          <div className="space-y-6">
+            <div className="flex items-center gap-3 pb-3 border-b border-gray-600/40">
+              <div className="p-2 bg-white rounded-lg shadow-lg">
+                <Languages className="text-black" size={16} />
               </div>
-              <h3 className="text-2xl font-bold text-white tracking-tight">Translation</h3>
+              <h3 className="text-lg font-bold text-white tracking-tight">Translation</h3>
             </div>
             
-            <div className="space-y-5">
-              <div className="space-y-4">
+            <div className="space-y-4">
+              <div className="space-y-3">
                 <div>
-                  <label className="block text-sm font-semibold text-gray-300 mb-3">
+                  <label className="block text-xs font-medium text-gray-300 mb-2">
                     Select Language:
                   </label>
                   <select
                     value={translationLang}
-                    onChange={(e) => setTranslationLang(e.target.value)}
-                    className="w-full p-4 bg-white/10 border border-gray-500/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-white/50 shadow-lg backdrop-blur-sm font-semibold text-base transition-all duration-300 hover:bg-white/20"
+                    onChange={(e) => handleLanguageChange(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-white/10 border border-gray-500/50 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-white/30 focus:border-white/50 shadow-sm backdrop-blur-sm font-medium text-sm transition-all duration-200 hover:bg-white/15"
                   >
                     {languages.map(lang => (
                       <option key={lang.code} value={lang.code} className="bg-gray-800 text-white">
@@ -435,18 +472,18 @@ const AIPanel = ({ note, aiFeatures, isLoading, translateNote, processNoteWithAI
                 
                 {note?.content && (
                   <button
-                    onClick={() => translateNote && translateNote(note.content, translationLang)}
+                    onClick={handleTranslateRequest}
                     disabled={isLoading}
-                    className="w-full p-4 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center gap-3"
+                    className="w-full px-4 py-2.5 bg-white hover:bg-gray-50 disabled:bg-gray-100 text-gray-800 disabled:text-gray-500 text-sm font-medium rounded-lg transition-all duration-200 ease-out flex items-center justify-center gap-2 border border-gray-200 hover:border-gray-300 disabled:border-gray-200 shadow-sm hover:shadow-md disabled:shadow-none"
                   >
                     {isLoading ? (
                       <>
-                        <Loader2 className="animate-spin" size={18} />
+                        <Loader2 className="animate-spin" size={14} />
                         Translating...
                       </>
                     ) : (
                       <>
-                        <Languages size={18} />
+                        <Languages size={14} />
                         Translate to {languages.find(l => l.code === translationLang)?.name}
                       </>
                     )}
@@ -454,57 +491,111 @@ const AIPanel = ({ note, aiFeatures, isLoading, translateNote, processNoteWithAI
                 )}
               </div>
               
-              {aiFeatures?.translation && aiFeatures.translation[translationLang] ? (
+              {(() => {
+                const hasTranslation = aiFeatures?.translation && aiFeatures.translation[translationLang];
+                const isRequested = requestedTranslations.has(translationLang);
+                console.log('🔍 Translation display check:', {
+                  language: translationLang,
+                  hasTranslation: !!hasTranslation,
+                  isRequested,
+                  shouldShow: hasTranslation && isRequested
+                });
+                return hasTranslation && isRequested;
+              })() ? (
                 <div className="relative">
-                  <div className="bg-gradient-to-br from-gray-800 to-gray-700 rounded-2xl border border-gray-600/50 shadow-xl backdrop-blur-sm overflow-hidden flex flex-col">
-                    {/* Copy Button - Small, Right Corner */}
-                    <button
-                      onClick={() => copyToClipboard(aiFeatures.translation[translationLang], 'translation')}
-                      className={`absolute top-2 right-2 p-1.5 rounded-md transition-all duration-200 z-30 ${
-                        copiedItems.translation 
-                          ? 'bg-yellow-500 shadow-md shadow-yellow-500/30 scale-105' 
-                          : 'bg-white/90 hover:bg-white shadow-md hover:shadow-lg backdrop-blur-sm border border-gray-300/40 hover:scale-105'
-                      }`}
-                      title="Copy translation"
-                    >
-                      {copiedItems.translation ? (
-                        <Check size={12} className="text-white" />
-                      ) : (
-                        <Copy size={12} className="text-gray-700" />
-                      )}
-                    </button>
+                  <div className="bg-gradient-to-br from-gray-800 to-gray-700 rounded-xl border border-gray-600/50 shadow-lg backdrop-blur-sm overflow-hidden flex flex-col">
+                    {/* Translation Info Header */}
+                    <div className="flex items-center justify-between p-3 border-b border-gray-600/30 bg-gray-700/50">
+                      <div className="flex items-center gap-2">
+                        <Languages size={16} className="text-blue-400" />
+                        <span className="text-sm font-semibold text-blue-400">
+                          {typeof aiFeatures.translation[translationLang] === 'object' 
+                            ? `${aiFeatures.translation[translationLang].sourceLanguage || 'auto'} → ${translationLang}`
+                            : `auto → ${translationLang}`
+                          }
+                        </span>
+                        {typeof aiFeatures.translation[translationLang] === 'object' && aiFeatures.translation[translationLang].provider && (
+                          <span className="px-2 py-1 bg-blue-500/20 text-blue-300 text-xs rounded-full font-medium">
+                            {aiFeatures.translation[translationLang].provider}
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Copy Button */}
+                      <button
+                        onClick={() => copyToClipboard(
+                          typeof aiFeatures.translation[translationLang] === 'object' 
+                            ? aiFeatures.translation[translationLang].text 
+                            : aiFeatures.translation[translationLang], 
+                          'translation'
+                        )}
+                        className={`p-1.5 rounded-md transition-all duration-200 ${
+                          copiedItems.translation 
+                            ? 'bg-yellow-500 shadow-md shadow-yellow-500/30 shadow-lg' 
+                            : 'bg-white/90 hover:bg-white shadow-md hover:shadow-lg backdrop-blur-sm border border-gray-300/40 hover:border-gray-400/60'
+                        }`}
+                        title="Copy translation"
+                      >
+                        {copiedItems.translation ? (
+                          <Check size={12} className="text-white" />
+                        ) : (
+                          <Copy size={12} className="text-gray-700" />
+                        )}
+                      </button>
+                    </div>
                     
                     {/* Text Content */}
-                    <div className="flex-1 p-5 pr-10 max-h-80 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
-                      <div className="text-base text-gray-100 text-professional">
-                        {aiFeatures.translation[translationLang]}
+                    <div className="flex-1 p-3 max-h-64 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                      <div className="text-sm text-gray-100 text-professional leading-relaxed">
+                        {typeof aiFeatures.translation[translationLang] === 'object' 
+                          ? aiFeatures.translation[translationLang].text 
+                          : aiFeatures.translation[translationLang]
+                        }
                       </div>
                     </div>
                     
-                    {/* Translation Word Count */}
-                    <div className="absolute bottom-3 left-4 bg-gray-700/80 px-2 py-1 rounded-md border border-gray-600/50">
-                      <span className="text-xs text-gray-300 font-medium">
-                        {getWordCount(aiFeatures.translation[translationLang])} words
-                      </span>
+                    {/* Translation Details Footer */}
+                    <div className="flex items-center justify-between p-2 bg-gray-700/30 border-t border-gray-600/20">
+                      <div className="flex items-center gap-3 text-xs text-gray-400">
+                        <span className="flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
+                          {getWordCount(
+                            typeof aiFeatures.translation[translationLang] === 'object' 
+                              ? aiFeatures.translation[translationLang].text 
+                              : aiFeatures.translation[translationLang]
+                          )} words
+                        </span>
+                        {typeof aiFeatures.translation[translationLang] === 'object' && aiFeatures.translation[translationLang].confidence && (
+                          <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 bg-green-400 rounded-full"></span>
+                            {Math.round(aiFeatures.translation[translationLang].confidence * 100)}% confidence
+                          </span>
+                        )}
+                      </div>
+                      {typeof aiFeatures.translation[translationLang] === 'object' && aiFeatures.translation[translationLang].timestamp && (
+                        <span className="text-xs text-gray-500">
+                          {new Date(aiFeatures.translation[translationLang].timestamp).toLocaleTimeString()}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-16">
-                  <div className="relative p-6 bg-gradient-to-br from-blue-800/30 to-purple-700/30 rounded-2xl w-fit mx-auto mb-6 shadow-xl border border-blue-500/30">
-                    <Languages className="text-blue-400" size={40} />
-                    <div className="absolute -top-2 -right-2 px-2 py-1 bg-blue-500 text-xs font-bold text-white rounded-full">12+</div>
+                <div className="text-center py-8">
+                  <div className="relative p-4 bg-gradient-to-br from-blue-800/30 to-purple-700/30 rounded-xl w-fit mx-auto mb-4 shadow-lg border border-blue-500/30">
+                    <Languages className="text-blue-400" size={28} />
+                    <div className="absolute -top-1 -right-1 px-1.5 py-0.5 bg-blue-500 text-xs font-bold text-white rounded-full">12+</div>
                   </div>
-                  <h4 className="font-bold text-blue-300 text-xl mb-2 tracking-tight">Multi-Language AI Translator</h4>
-                  <p className="font-medium text-gray-400 max-w-xs mx-auto mb-4">
+                  <h4 className="font-semibold text-blue-300 text-base mb-2 tracking-tight">Multi-Language AI Translator</h4>
+                  <p className="font-medium text-gray-400 text-sm max-w-xs mx-auto mb-3">
                     Professional-grade translation powered by advanced AI models
                   </p>
                   <div className="flex flex-wrap gap-1 justify-center opacity-60">
-                    <span className="text-xs px-2 py-1 bg-blue-600/20 text-blue-300 rounded">🇪🇸 ES</span>
-                    <span className="text-xs px-2 py-1 bg-blue-600/20 text-blue-300 rounded">🇫🇷 FR</span>
-                    <span className="text-xs px-2 py-1 bg-blue-600/20 text-blue-300 rounded">🇩🇪 DE</span>
-                    <span className="text-xs px-2 py-1 bg-blue-600/20 text-blue-300 rounded">🇯🇵 JP</span>
-                    <span className="text-xs px-2 py-1 bg-blue-600/20 text-blue-300 rounded">+8</span>
+                    <span className="text-xs px-1.5 py-0.5 bg-blue-600/20 text-blue-300 rounded">🇪🇸 ES</span>
+                    <span className="text-xs px-1.5 py-0.5 bg-blue-600/20 text-blue-300 rounded">🇫🇷 FR</span>
+                    <span className="text-xs px-1.5 py-0.5 bg-blue-600/20 text-blue-300 rounded">🇩🇪 DE</span>
+                    <span className="text-xs px-1.5 py-0.5 bg-blue-600/20 text-blue-300 rounded">🇯🇵 JP</span>
+                    <span className="text-xs px-1.5 py-0.5 bg-blue-600/20 text-blue-300 rounded">+8</span>
                   </div>
                 </div>
               )}
@@ -517,39 +608,58 @@ const AIPanel = ({ note, aiFeatures, isLoading, translateNote, processNoteWithAI
     }
   };
 
+  // Handle case when no note is provided
+  if (!note) {
+    return (
+      <div className="h-full flex flex-col bg-gradient-to-br from-gray-900 to-gray-800">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center py-16">
+            <div className="p-6 bg-gray-800/50 rounded-xl w-fit mx-auto mb-6">
+              <Brain className="text-gray-400" size={48} />
+            </div>
+            <h3 className="font-bold text-white text-xl mb-3">AI Assistant Ready</h3>
+            <p className="text-gray-400 text-base max-w-sm mx-auto">
+              Select a note to access AI-powered features like summaries, tags, and translations
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full flex flex-col bg-gradient-to-br from-gray-900 to-gray-800">
       {/* Header */}
-      <div className="px-8 py-5 border-b border-gray-700/50 bg-gradient-to-r from-gray-800 to-gray-750">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-white rounded-xl shadow-lg">
-            <Sparkles size={26} className="text-black" />
+      <div className="px-5 py-3 border-b border-gray-700/50 bg-gradient-to-r from-gray-800 to-gray-750">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-white rounded-lg shadow-lg">
+            <Sparkles size={20} className="text-black" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-white tracking-tight leading-tight">AI Assistant</h2>
-            <p className="text-gray-300 text-base font-medium mt-1 leading-relaxed">
-              Enhance your notes with intelligent AI
+            <h2 className="text-lg font-bold text-white tracking-tight leading-tight">AI Assistant</h2>
+            <p className="text-gray-300 text-sm font-medium mt-1 leading-relaxed">
+              Enhanced with multi-provider AI summary
             </p>
           </div>
         </div>
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-700/50 bg-gray-800/80 px-5">
-        <div className="grid grid-cols-2 gap-3 py-4">
+      <div className="border-b border-gray-700/50 bg-gray-800/80 px-4">
+        <div className="grid grid-cols-3 gap-2 py-3">
           {tabs.map(tab => {
             const Icon = tab.icon;
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`group relative flex items-center justify-center gap-2 py-3.5 px-4 font-semibold text-base rounded-lg transition-all duration-300 ease-out ${
+                className={`group relative flex items-center justify-center gap-1 py-2.5 px-3 font-semibold text-sm rounded-lg transition-all duration-300 ease-out ${
                   activeTab === tab.id
                     ? 'text-black bg-white shadow-xl shadow-white/20'
                     : 'text-gray-300 bg-gray-700/60 hover:bg-gray-600/80 hover:text-white hover:shadow-lg border border-gray-600/50 hover:border-gray-500/70'
                 }`}
               >
-                <Icon size={18} className="flex-shrink-0 transition-transform duration-300 group-hover:scale-110" />
+                <Icon size={18} className="flex-shrink-0 transition-all duration-200 group-hover:opacity-80" />
                 <span className="whitespace-nowrap text-base font-bold tracking-wide">{tab.label}</span>
                 {activeTab === tab.id && (
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent rounded-lg animate-pulse"></div>
@@ -561,39 +671,37 @@ const AIPanel = ({ note, aiFeatures, isLoading, translateNote, processNoteWithAI
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-hidden px-6 py-5">
+      <div className="flex-1 overflow-hidden px-4 py-3">
         <div className="h-full">
           {renderTabContent()}
         </div>
       </div>
 
-      {/* Footer */}
-      <div className="px-6 py-3 border-t border-gray-700/50 bg-gray-800/60">
+      {/* Enhanced Footer */}
+      <div className="px-4 py-2 border-t border-gray-700/50 bg-gray-800/60">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full animate-pulse shadow-sm ${
-              isLoading ? 'bg-yellow-400 shadow-yellow-400/30' : 'bg-green-400 shadow-green-400/30'
+              isLoading || summaryLoading ? 'bg-yellow-400 shadow-yellow-400/30' : 'bg-green-400 shadow-green-400/30'
             }`}></div>
             <p className="text-xs text-gray-400 font-medium">
-              {isLoading ? 'AI Processing...' : 'AI Ready'}
+              {isLoading || summaryLoading ? 'AI Processing...' : 'AI Ready'}
             </p>
           </div>
-          <div className="flex items-center gap-4 text-xs text-gray-500">
+          <div className="flex items-center gap-3 text-xs text-gray-500">
             <span className="flex items-center gap-1">
               <Brain size={10} />
-              {aiFeatures?.summary ? '✓ Summary' : '- Summary'}
+              {currentSummary ? '✓ Summary' : '- Summary'}
             </span>
             <span className="flex items-center gap-1">
               <Tags size={10} />
               {aiFeatures?.tags ? `✓ ${aiFeatures.tags.length} Tags` : '- Tags'}
             </span>
-            <span className="flex items-center gap-1">
-              <CheckCircle size={10} />
-              {aiFeatures?.grammarIssues !== null ? '✓ Grammar' : '- Grammar'}
-            </span>
           </div>
         </div>
       </div>
+
+
     </div>
   );
 };

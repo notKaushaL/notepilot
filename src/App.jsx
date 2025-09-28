@@ -76,6 +76,28 @@ function App() {
     setCurrentNote(null);
   };
 
+  const formatTime = (date) => {
+    const now = new Date();
+    const noteDate = new Date(date);
+    const diffInHours = (now - noteDate) / (1000 * 60 * 60);
+
+    if (diffInHours < 1) {
+      const diffInMinutes = Math.floor(diffInHours * 60);
+      return `${diffInMinutes}m ago`;
+    } else if (diffInHours < 24) {
+      return `${Math.floor(diffInHours)}h ago`;
+    } else if (diffInHours < 168) {
+      const diffInDays = Math.floor(diffInHours / 24);
+      return `${diffInDays}d ago`;
+    } else {
+      return noteDate.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric',
+        year: noteDate.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+      });
+    }
+  };
+
   // Debug: Verify all functions are available
   console.log('🔍 App.jsx functions verification:', {
     deleteNote: typeof deleteNote,
@@ -102,7 +124,7 @@ function App() {
         fixed lg:relative 
         z-40 lg:z-0 
         transition-transform duration-300 ease-in-out
-        h-screen w-72 flex-shrink-0
+        h-screen w-60 flex-shrink-0
         border-r border-gray-700
       `}>
         <Sidebar
@@ -120,7 +142,7 @@ function App() {
         {viewMode === 'grid' ? (
           <>
             {/* Header - Professional layout with proper spacing */}
-            <div className="flex-shrink-0 bg-gray-900 border-b border-gray-700 px-4 sm:px-6 lg:px-8 py-6">
+            <div className="flex-shrink-0 bg-gray-900 border-b border-gray-700 px-3 sm:px-4 lg:px-5 py-4">
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div className="pl-12 lg:pl-0 min-w-0 flex-1">
                   <h1 className="text-xl sm:text-2xl font-bold text-white truncate">
@@ -158,6 +180,7 @@ function App() {
                 onDecryptNote={decryptNote}
                 timeFilter={timeFilter}
                 showArchived={showArchived}
+                onCreateFirstNote={createNote}
               />
             </div>
           </>
@@ -169,11 +192,11 @@ function App() {
               {currentNote ? (
                 <>
                   {/* Note Header - Professional editor header */}
-                  <div className="flex-shrink-0 bg-gray-800 p-6 lg:p-8 border-b border-gray-700">
+                  <div className="flex-shrink-0 bg-gray-800 p-4 lg:p-5 border-b border-gray-700">
                     <div className="flex items-center gap-4 mb-6">
                       <button
                         onClick={handleBackToGrid}
-                        className="text-gray-300 hover:text-white flex items-center gap-2 font-semibold bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-xl transition-all duration-200 hover:scale-105"
+                        className="text-gray-300 hover:text-white flex items-center gap-2 font-semibold bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-xl transition-all duration-200 hover:shadow-md"
                       >
                         ← Back to Notes
                       </button>
@@ -183,7 +206,7 @@ function App() {
                       value={currentNote.title}
                       onChange={(e) => handleNoteTitleChange(e.target.value)}
                       placeholder="Note title..."
-                      className="text-2xl lg:text-3xl font-bold text-white w-full outline-none bg-transparent border-b border-gray-600 focus:border-gray-400 pb-3 placeholder:text-gray-500 transition-colors"
+                      className="text-xl lg:text-2xl font-bold text-white w-full outline-none bg-transparent border-b border-gray-600 focus:border-gray-400 pb-2 placeholder:text-gray-500 transition-colors"
                     />
                     <div className="text-sm text-gray-400 font-medium mt-3">
                       Last edited: {new Date(currentNote.updatedAt).toLocaleString()}
@@ -210,9 +233,9 @@ function App() {
               )}
             </div>
 
-            {/* AI Panel - Increased width by 20%, proper scrolling */}
+            {/* AI Panel - Enhanced with summary functionality */}
             {currentNote && (
-              <div className="w-[460px] bg-gray-800 border-l border-gray-700 flex-shrink-0 overflow-y-auto overflow-x-hidden">
+              <div className="w-[368px] bg-gray-800 border-l border-gray-700 flex-shrink-0 overflow-y-auto overflow-x-hidden">
                 <AIPanel
                   note={currentNote}
                   aiFeatures={aiFeatures}

@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import {
-  Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight,
-  Type, Undo, Redo, Palette, List, ListOrdered
+  Bold, Italic, Underline, AlignLeft, AlignCenter, AlignRight, AlignJustify,
+  Type, Undo, Redo, Palette
 } from 'lucide-react';
 import GlossaryTooltip from './GlossaryTooltip';
 import { useAI } from '../hooks/useAI';
@@ -19,7 +19,9 @@ const RichTextEditor = ({ content, onChange, glossaryTerms = [] }) => {
     }
   }, [content]);
 
-  // Handle content changes with debouncing for better performance
+
+
+  // Handle content changes
   const handleInput = useCallback(() => {
     if (editorRef.current) {
       const newContent = editorRef.current.innerHTML;
@@ -44,16 +46,34 @@ const RichTextEditor = ({ content, onChange, glossaryTerms = [] }) => {
       justifyLeft: document.queryCommandState('justifyLeft'),
       justifyCenter: document.queryCommandState('justifyCenter'),
       justifyRight: document.queryCommandState('justifyRight'),
+      justifyFull: document.queryCommandState('justifyFull'),
     };
     setFormatStates(states);
   };
 
   // Format commands
   const executeCommand = (command, value = null) => {
-    document.execCommand(command, false, value);
+    // Ensure editor is focused and has selection
     editorRef.current.focus();
-    updateFormatStates();
+    
+    // If no selection, create one at cursor position
+    const selection = window.getSelection();
+    if (selection.rangeCount === 0 || selection.isCollapsed) {
+      const range = document.createRange();
+      range.selectNodeContents(editorRef.current);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+    
+    document.execCommand(command, false, value);
     handleInput();
+    
+    // Update format states immediately and after delay
+    updateFormatStates();
+    setTimeout(() => {
+      updateFormatStates();
+    }, 50);
   };
 
   // Font size handler
@@ -68,8 +88,10 @@ const RichTextEditor = ({ content, onChange, glossaryTerms = [] }) => {
 
   // Handle selection change to update button states
   const handleSelectionChange = () => {
-    if (isEditorFocused) {
-      updateFormatStates();
+    if (isEditorFocused && document.activeElement === editorRef.current) {
+      setTimeout(() => {
+        updateFormatStates();
+      }, 10);
     }
   };
 
@@ -77,6 +99,9 @@ const RichTextEditor = ({ content, onChange, glossaryTerms = [] }) => {
     document.addEventListener('selectionchange', handleSelectionChange);
     return () => document.removeEventListener('selectionchange', handleSelectionChange);
   }, [isEditorFocused]);
+
+  // Apply grammar error highlighting to text
+
 
   // Highlight glossary terms
   const highlightGlossaryTerms = useCallback((text) => {
@@ -101,21 +126,21 @@ const RichTextEditor = ({ content, onChange, glossaryTerms = [] }) => {
       <div className="flex gap-2 border-r border-gray-600 pr-4">
         <button
           className={`toolbar-button ${formatStates.bold ? 'active' : ''}`}
-          onClick={() => executeCommand('bold')}
+          onMouseDown={(e) => { e.preventDefault(); executeCommand('bold'); }}
           title="Bold"
         >
           <Bold size={16} />
         </button>
         <button
           className={`toolbar-button ${formatStates.italic ? 'active' : ''}`}
-          onClick={() => executeCommand('italic')}
+          onMouseDown={(e) => { e.preventDefault(); executeCommand('italic'); }}
           title="Italic"
         >
           <Italic size={16} />
         </button>
         <button
           className={`toolbar-button ${formatStates.underline ? 'active' : ''}`}
-          onClick={() => executeCommand('underline')}
+          onMouseDown={(e) => { e.preventDefault(); executeCommand('underline'); }}
           title="Underline"
         >
           <Underline size={16} />
@@ -126,42 +151,31 @@ const RichTextEditor = ({ content, onChange, glossaryTerms = [] }) => {
       <div className="flex gap-2 border-r border-gray-600 pr-4">
         <button
           className={`toolbar-button ${formatStates.justifyLeft ? 'active' : ''}`}
-          onClick={() => executeCommand('justifyLeft')}
+          onMouseDown={(e) => { e.preventDefault(); executeCommand('justifyLeft'); }}
           title="Align Left"
         >
           <AlignLeft size={16} />
         </button>
         <button
           className={`toolbar-button ${formatStates.justifyCenter ? 'active' : ''}`}
-          onClick={() => executeCommand('justifyCenter')}
+          onMouseDown={(e) => { e.preventDefault(); executeCommand('justifyCenter'); }}
           title="Align Center"
         >
           <AlignCenter size={16} />
         </button>
         <button
           className={`toolbar-button ${formatStates.justifyRight ? 'active' : ''}`}
-          onClick={() => executeCommand('justifyRight')}
+          onMouseDown={(e) => { e.preventDefault(); executeCommand('justifyRight'); }}
           title="Align Right"
         >
           <AlignRight size={16} />
         </button>
-      </div>
-
-      {/* Lists */}
-      <div className="flex gap-2 border-r border-gray-600 pr-4">
         <button
-          className="toolbar-button"
-          onClick={() => executeCommand('insertUnorderedList')}
-          title="Bullet List"
+          className={`toolbar-button ${formatStates.justifyFull ? 'active' : ''}`}
+          onMouseDown={(e) => { e.preventDefault(); executeCommand('justifyFull'); }}
+          title="Justify"
         >
-          <List size={16} />
-        </button>
-        <button
-          className="toolbar-button"
-          onClick={() => executeCommand('insertOrderedList')}
-          title="Numbered List"
-        >
-          <ListOrdered size={16} />
+          <AlignJustify size={16} />
         </button>
       </div>
 
@@ -169,63 +183,71 @@ const RichTextEditor = ({ content, onChange, glossaryTerms = [] }) => {
       <div className="flex gap-2 border-r border-gray-600 pr-4">
         <select
           onChange={(e) => handleFontSize(e.target.value)}
-          className="px-3 py-2 font-medium bg-gray-700 border border-gray-600 rounded-lg text-white"
+          className="px-3 py-2 font-medium bg-gray-700 border border-gray-600 rounded-lg text-white min-w-[80px]"
           title="Font Size"
+          style={{ fontFamily: 'monospace' }}
         >
-          <option value="1">8pt</option>
-          <option value="2">10pt</option>
-          <option value="3" defaultValue>12pt</option>
-          <option value="4">14pt</option>
-          <option value="5">18pt</option>
-          <option value="6">24pt</option>
-          <option value="7">36pt</option>
+          <option value="1" style={{ fontSize: '8px', fontFamily: 'inherit' }}>8pt</option>
+          <option value="2" style={{ fontSize: '10px', fontFamily: 'inherit' }}>10pt</option>
+          <option value="3" style={{ fontSize: '12px', fontFamily: 'inherit' }} defaultValue>12pt</option>
+          <option value="4" style={{ fontSize: '14px', fontFamily: 'inherit' }}>14pt</option>
+          <option value="5" style={{ fontSize: '18px', fontFamily: 'inherit' }}>18pt</option>
+          <option value="6" style={{ fontSize: '24px', fontFamily: 'inherit' }}>24pt</option>
+          <option value="7" style={{ fontSize: '36px', fontFamily: 'inherit' }}>36pt</option>
         </select>
       </div>
 
       {/* Color Picker */}
       <div className="flex gap-2 border-r border-gray-600 pr-4">
-        <input
-          type="color"
-          onChange={(e) => handleColorChange(e.target.value)}
-          className="w-10 h-10 border border-gray-600 rounded-lg cursor-pointer"
-          title="Text Color"
-        />
+        <div className="relative">
+          <input
+            type="color"
+            onChange={(e) => handleColorChange(e.target.value)}
+            className="w-10 h-10 border border-gray-600 rounded-lg cursor-pointer bg-transparent"
+            title="Text Color"
+            defaultValue="#ffffff"
+          />
+        </div>
       </div>
 
       {/* Undo/Redo */}
-      <div className="flex gap-1">
+      <div className="flex gap-1 border-r border-gray-600 pr-4">
         <button
           className="toolbar-button"
-          onClick={() => executeCommand('undo')}
+          onMouseDown={(e) => { e.preventDefault(); executeCommand('undo'); }}
           title="Undo"
         >
           <Undo size={16} />
         </button>
         <button
           className="toolbar-button"
-          onClick={() => executeCommand('redo')}
+          onMouseDown={(e) => { e.preventDefault(); executeCommand('redo'); }}
           title="Redo"
         >
           <Redo size={16} />
         </button>
       </div>
+
+
     </div>
   );
 
   return (
     <div className="h-full flex flex-col">
       <Toolbar />
-      <div className="flex-1 relative">
+      <div className="flex-1 relative overflow-hidden">
         <div
           ref={editorRef}
-          className="note-editor h-full w-full"
+          className="note-editor h-full w-full overflow-y-auto"
           contentEditable
           onInput={handleInput}
           onPaste={handlePaste}
           onFocus={() => setIsEditorFocused(true)}
           onBlur={() => setIsEditorFocused(false)}
+          onMouseUp={updateFormatStates}
+          onKeyUp={updateFormatStates}
           suppressContentEditableWarning={true}
-          style={{ minHeight: '400px' }}
+          style={{ minHeight: '400px', padding: '20px' }}
           data-placeholder="Start writing your note..."
         />
         
@@ -233,12 +255,14 @@ const RichTextEditor = ({ content, onChange, glossaryTerms = [] }) => {
         <GlossaryTooltip />
         
         {/* Word Count Display */}
-        <div className="absolute bottom-4 right-4 bg-gray-800 bg-opacity-90 px-3 py-1 rounded-lg border border-gray-600">
+        <div className="absolute bottom-4 right-4 bg-gray-800 bg-opacity-90 px-3 py-1 rounded-lg border border-gray-600 z-10">
           <span className="text-sm text-gray-300">
             {getWordCount(content)} words
           </span>
         </div>
       </div>
+
+
     </div>
   );
 };

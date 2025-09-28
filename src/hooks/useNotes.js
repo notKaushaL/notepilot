@@ -73,9 +73,19 @@ export const useNotes = () => {
 
   // Create a new note
   const createNote = useCallback(() => {
+    // Generate auto-numbered title
+    const existingNumbers = notes
+      .map(note => {
+        const match = note.title.match(/^New Note (\d+)$/);
+        return match ? parseInt(match[1]) : 0;
+      })
+      .filter(num => num > 0);
+    
+    const nextNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
+    
     const newNote = {
       id: generateId(),
-      title: 'New Note',
+      title: `New Note ${nextNumber}`,
       content: '',
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -84,11 +94,25 @@ export const useNotes = () => {
       isEncrypted: false,
       aiTags: [],
       aiSummary: '',
+      isNewlyCreated: true // Flag for animation
     };
 
     setNotes(prevNotes => [newNote, ...prevNotes]);
     setCurrentNote(newNote);
-  }, []);
+    
+    // Remove the newly created flag after animation completes
+    setTimeout(() => {
+      setNotes(prevNotes => 
+        prevNotes.map(note => {
+          if (note.id === newNote.id) {
+            const { isNewlyCreated, ...noteWithoutFlag } = note;
+            return noteWithoutFlag;
+          }
+          return note;
+        })
+      );
+    }, 1500);
+  }, [notes]);
 
   // Update an existing note
   const updateNote = useCallback((updatedNote) => {
@@ -239,19 +263,52 @@ export const useNotes = () => {
     if (!note || !note.isEncrypted) return false;
 
     try {
-      const decryptedContent = CryptoJS.AES.decrypt(note.content, password).toString(CryptoJS.enc.Utf8);
-      const decryptedTitle = CryptoJS.AES.decrypt(note.title, password).toString(CryptoJS.enc.Utf8);
+      console.log('🔐 Attempting to decrypt note:', noteId);
       
-      if (!decryptedContent || !decryptedTitle) {
-        return false; // Invalid password
+      // Attempt to decrypt the content and title
+      const decryptedContentBytes = CryptoJS.AES.decrypt(note.content, password);
+      const decryptedTitleBytes = CryptoJS.AES.decrypt(note.title, password);
+      
+      // Convert to UTF-8 string
+      let decryptedContent, decryptedTitle;
+      
+      try {
+        decryptedContent = decryptedContentBytes.toString(CryptoJS.enc.Utf8);
+        decryptedTitle = decryptedTitleBytes.toString(CryptoJS.enc.Utf8);
+      } catch (decryptError) {
+        console.log('❌ Decryption failed - invalid password');
+        return false;
+      }
+      
+      // Check if decryption was successful
+      // Valid decryption should produce readable text, not empty strings or malformed data
+      if (!decryptedContent || !decryptedTitle || 
+          decryptedContent.length === 0 || decryptedTitle.length === 0) {
+        console.log('❌ Decryption failed - empty result (wrong password)');
+        return false;
+      }
+      
+      // Additional validation: check if the decrypted content contains only valid characters
+      // If password is wrong, decrypted text often contains invalid UTF-8 sequences
+      try {
+        JSON.stringify(decryptedContent);
+        JSON.stringify(decryptedTitle);
+      } catch (jsonError) {
+        console.log('❌ Decryption failed - invalid characters (wrong password)');
+        return false;
       }
 
+      console.log('✅ Decryption successful');
+      
       const decryptedNote = {
         ...note,
         content: decryptedContent,
         title: decryptedTitle,
         isEncrypted: false,
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        // Remove preview properties
+        previewTitle: undefined,
+        previewContent: undefined
       };
 
       // Update the note in the list
@@ -266,7 +323,7 @@ export const useNotes = () => {
 
       return true;
     } catch (error) {
-      console.error('Error decrypting note:', error);
+      console.error('❌ Error decrypting note:', error);
       return false;
     }
   }, [notes]);

@@ -5,13 +5,7 @@ import {
   Settings, 
   HelpCircle, 
   Archive,
-  Grid,
-  List,
-  Edit3,
-  ChevronLeft,
   ChevronRight,
-  Download,
-  Upload,
   Trash2,
   Pin,
   Clock
@@ -30,10 +24,6 @@ const Sidebar = ({
   onDeleteNote,
   onPinNote,
   onArchiveNote,
-  viewMode = 'editor',
-  onViewModeChange,
-  sortBy = 'modified',
-  onSortChange,
   pinnedNotes = [],
   onExport,
   onImport
@@ -57,16 +47,19 @@ const Sidebar = ({
   };
 
   return (
-    <div className="w-full h-full bg-gray-900 flex flex-col">
+    <div className="w-full h-full bg-gradient-sidebar flex flex-col relative overflow-hidden">
+      {/* Subtle gradient overlay for depth */}
+      <div className="absolute inset-0 bg-gradient-to-b from-blue-500/5 via-transparent to-purple-500/5 pointer-events-none"></div>
+      
       {/* Header - Fixed at top */}
-      <div className="flex-shrink-0 p-6 border-b border-gray-700">
-        <div className="flex items-center gap-3 mb-6">
+      <div className="flex-shrink-0 p-4 border-b border-gray-700/30 relative z-10">
+        <div className="flex items-center gap-2 mb-8">
           <img 
             src="/NotePilot-Logo.png" 
             alt="NotePilot Logo" 
             className="w-8 h-8"
           />
-          <h1 className="text-xl font-bold text-white">NotePilot</h1>
+          <h1 className="text-2xl font-bold text-white tracking-tight">NotePilot</h1>
         </div>
 
         {/* Create Note Button */}
@@ -74,16 +67,17 @@ const Sidebar = ({
           onClick={handleCreateNote}
           disabled={isCreating}
           className={`
-            w-full flex items-center gap-3 px-4 py-3 bg-white text-gray-900 
-            hover:bg-gray-100 transition-all duration-300 font-semibold rounded-lg
-            transform hover:scale-105 hover:shadow-xl group relative overflow-hidden
-            ${isCreating ? 'animate-pulseSuccess scale-95' : ''}
-            active:scale-95 disabled:opacity-70
+            w-full mx-auto flex items-center gap-2 px-4 py-3 bg-gradient-button text-gray-900 
+            hover:bg-gradient-button transition-all duration-300 font-medium rounded-xl
+            transform hover:translate-y-[-1px] hover:shadow-2xl group relative overflow-hidden
+            border border-white/20 hover:border-white/40 shadow-lg text-sm
+            ${isCreating ? 'animate-glow opacity-90' : ''}
+            active:animate-button-press disabled:opacity-70
           `}
         >
-          <div className={`absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent 
-            ${isCreating ? 'animate-shimmer' : ''} -skew-x-12`} />
-          <Plus size={18} className={`transition-transform duration-300 
+          <div className={`absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent 
+            ${isCreating ? 'animate-shimmer' : 'group-hover:animate-shimmer'} -skew-x-12`} />
+          <Plus size={16} className={`transition-transform duration-300 
             ${isCreating ? 'animate-spin' : 'group-hover:rotate-90'}`} />
           <span className="relative z-10">
             {isCreating ? 'Creating...' : 'Create Note'}
@@ -91,80 +85,39 @@ const Sidebar = ({
         </button>
 
         {/* Search */}
-        <div className="relative mt-4">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+        <div className="relative mt-6 w-full mx-auto group">
+          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 z-10">
+            <Search className="text-gray-400 group-hover:text-gray-300 transition-colors duration-200" size={16} />
+          </div>
           <input
             type="text"
             placeholder="Search notes..."
             value={searchTerm}
             onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 bg-gray-800 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 font-medium text-white placeholder:text-gray-400"
+            className="w-full pl-10 pr-3 py-3 bg-white/5 backdrop-blur-md border border-white/10 rounded-xl hover:bg-white/8 hover:border-white/20 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500/30 focus:bg-white/10 font-medium text-sm text-white placeholder:text-gray-400 transition-all duration-300 shadow-lg hover:shadow-xl hover:shadow-white/5"
           />
         </div>
 
         {/* Archives Toggle */}
         <button 
           onClick={onToggleArchived}
-          className={`w-full flex items-center gap-3 px-3 py-3 transition-colors mt-4 font-medium rounded-lg ${
+          className={`w-full mx-auto flex items-center gap-2 px-3 py-2.5 transition-all duration-200 mt-5 font-medium rounded-xl hover:bg-gray-700/50 text-sm whitespace-nowrap ${
             showArchived 
               ? 'bg-gray-700 text-white' 
               : 'text-gray-300 hover:bg-gray-800 hover:text-white'
           }`}
         >
           <Archive size={16} />
-          {showArchived ? 'Show Active Notes' : 'Show Archived Notes'}
+          <span className="truncate">{showArchived ? 'Show Active Notes' : 'Show Archived Notes'}</span>
         </button>
       </div>
 
-      {/* View Mode Toggle */}
-      <div className="px-6 py-4 border-b border-gray-700">
-        <div className="flex items-center gap-2 p-1 bg-gray-800 rounded-lg">
-          <button
-            onClick={() => onViewModeChange('editor')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md transition-colors ${
-              viewMode === 'editor' ? 'bg-white text-gray-900' : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <Edit3 size={14} />
-            <span className="text-sm font-medium">Editor</span>
-          </button>
-          <button
-            onClick={() => onViewModeChange('grid')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md transition-colors ${
-              viewMode === 'grid' ? 'bg-white text-gray-900' : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <Grid size={14} />
-            <span className="text-sm font-medium">Grid</span>
-          </button>
-          <button
-            onClick={() => onViewModeChange('list')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md transition-colors ${
-              viewMode === 'list' ? 'bg-white text-gray-900' : 'text-gray-400 hover:text-white'
-            }`}
-          >
-            <List size={14} />
-            <span className="text-sm font-medium">List</span>
-          </button>
-        </div>
-      </div>
 
-      {/* Sort Controls */}
-      <div className="px-6 py-3 border-b border-gray-700">
-        <select
-          value={sortBy}
-          onChange={(e) => onSortChange(e.target.value)}
-          className="w-full px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 text-white text-sm"
-        >
-          <option value="modified">Recently Modified</option>
-          <option value="created">Recently Created</option>
-          <option value="title">Alphabetical</option>
-          <option value="pinned">Pinned First</option>
-        </select>
-      </div>
+
+
 
       {/* Notes List */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto relative">
         {/* Pinned Notes */}
         {pinnedNotes.length > 0 && (
           <div className="p-4 border-b border-gray-700">
@@ -194,8 +147,8 @@ const Sidebar = ({
         )}
 
         {/* Regular Notes */}
-        <div className="p-4">
-          {notes.length > 0 ? (
+        {notes.length > 0 ? (
+          <div className="p-4">
             <div className="space-y-2">
               {notes.map(note => (
                 <div
@@ -221,50 +174,25 @@ const Sidebar = ({
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="text-center py-8">
-              <div className="text-gray-500 mb-2">
-                {showArchived ? 'No archived notes' : 'No notes yet'}
-              </div>
-              {!showArchived && (
-                <button
-                  onClick={handleCreateNote}
-                  className="text-white hover:text-gray-300 text-sm underline"
-                >
-                  Create your first note
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="p-4 h-full">
+            {/* Empty state - no content */}
+          </div>
+        )}
       </div>
 
       {/* Footer */}
-      <div className="p-4 border-t border-gray-700 space-y-2">
-        <div className="flex gap-2">
-          <button 
-            onClick={() => onExport && onExport()}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-gray-300 hover:bg-gray-800 hover:text-white transition-colors font-medium rounded-lg text-sm"
-          >
-            <Download size={14} />
-            Export
-          </button>
-          <button 
-            onClick={() => onImport && onImport()}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 text-gray-300 hover:bg-gray-800 hover:text-white transition-colors font-medium rounded-lg text-sm"
-          >
-            <Upload size={14} />
-            Import
-          </button>
-        </div>
+      <div className="p-4 border-t border-gray-700/50 space-y-3 bg-gray-900/50">
+
         
         <button 
           onClick={() => setShowSettings(!showSettings)}
-          className="w-full flex items-center gap-3 px-3 py-3 text-gray-300 hover:bg-gray-800 hover:text-white transition-colors font-medium rounded-lg"
+          className="w-11/12 mx-auto flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:bg-gray-700/50 hover:text-white transition-all duration-200 font-medium rounded-xl border border-transparent hover:border-gray-700/50 text-sm"
         >
-          <Settings size={16} />
+          <Settings size={18} />
           Settings
-          <ChevronRight size={14} className={`ml-auto transition-transform ${showSettings ? 'rotate-90' : ''}`} />
+          <ChevronRight size={16} className={`ml-auto transition-transform ${showSettings ? 'rotate-90' : ''}`} />
         </button>
         
         {showSettings && (
@@ -280,8 +208,8 @@ const Sidebar = ({
           </div>
         )}
         
-        <button className="w-full flex items-center gap-3 px-3 py-3 text-gray-300 hover:bg-gray-800 hover:text-white transition-colors font-medium rounded-lg">
-          <HelpCircle size={16} />
+        <button className="w-11/12 mx-auto flex items-center gap-3 px-4 py-2.5 text-gray-300 hover:bg-gray-700/50 hover:text-white transition-all duration-200 font-medium rounded-xl border border-transparent hover:border-gray-700/50 text-sm">
+          <HelpCircle size={18} />
           Help & Support
         </button>
       </div>
